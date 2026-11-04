@@ -1,0 +1,295 @@
+/* Mobile-first: Grundlayout fürs Handy, ab 600px etwas mehr Platz. */
+
+:root {
+  --bg: #f4f6f5;
+  --surface: #ffffff;
+  --text: #1c2321;
+  --muted: #5f6b67;
+  --border: #dde3e1;
+  --primary: #0f766e;
+  --primary-text: #ffffff;
+  --positive: #15803d;
+  --negative: #b91c1c;
+  --error-bg: #fdecec;
+  --radius: 12px;
+
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111615;
+    --surface: #1a2120;
+    --text: #e6ecea;
+    --muted: #9aa8a3;
+    --border: #2c3634;
+    --primary: #2dd4bf;
+    --primary-text: #062b27;
+    --positive: #4ade80;
+    --negative: #f87171;
+    --error-bg: #3a1a1a;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+h1,
+h2 {
+  margin: 0 0 0.75rem;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: 1.35rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+}
+
+/* Kopfzeile mit Tabs */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.75rem 1rem 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  max-width: 640px;
+  margin: 0 auto 0.5rem;
+}
+
+.tabs {
+  display: flex;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.tabs a {
+  flex: 1;
+  padding: 0.7rem 0.25rem;
+  text-align: center;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 3px solid transparent;
+}
+
+.tabs a.router-link-exact-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Listen */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.row:first-child {
+  border-top: none;
+}
+
+.row small {
+  display: block;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.amount {
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.positive {
+  color: var(--positive);
+}
+
+.negative {
+  color: var(--negative);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* Formulare */
+.form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+label {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+fieldset {
+  margin: 0;
+  padding: 0.5rem 0.75rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+legend {
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0 0.25rem;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 400;
+  min-height: 44px;
+}
+
+.checkbox input {
+  width: 1.2rem;
+  min-height: auto;
+}
+
+.grid-2 {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.inline-form {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.inline-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Buttons */
+button,
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.55rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--primary-text);
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+button.secondary {
+  color: var(--primary);
+  background: transparent;
+}
+
+button.icon {
+  min-width: 44px;
+  padding: 0.4rem;
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+}
+
+button.danger {
+  color: var(--negative);
+}
+
+.error {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  color: var(--negative);
+  background: var(--error-bg);
+  border-radius: 8px;
+}
+
+.form .error {
+  margin: 0;
+}
+
+@media (min-width: 600px) {
+  .grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
