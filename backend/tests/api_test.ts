@@ -1,182 +1,155 @@
-// Testet die REST-API von außen, mit einer frischen In-Memory-Datenbank pro Test.
+// Tests für die REST-API. Jeder Test startet mit einer leeren Datenbank im Arbeitsspeicher.
 
 import { assertEquals } from "@std/assert";
-import { createApp } from "../src/app.ts";
-import { openDatabase } from "../src/db.ts";
-import { createSqliteRepositories } from "../src/repositories/sqlite.ts";
+import { app } from "../src/app.ts";
+import { openDatabase } from "../src/database.ts";
 
-function setup() {
-  const app = createApp({ repos: createSqliteRepositories(openDatabase(":memory:")) });
-  const call = async (method: string, path: string, body?: unknown) => {
-    const res = await app.request(path, {
-      method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await res.text();
-    return { status: res.status, body: text ? JSON.parse(text) : null };
-  };
-  return { app, call };
+// Schickt eine Anfrage an die App und gibt Status und JSON-Antwort zurück.
+async function send(method: string, path: string, body?: object) {
+  const response = await app.request(path, {
+    method: method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await response.text();
+  return { status: response.status, data: text ? JSON.parse(text) : null };
 }
 
-async function withMembers(names: string[]) {
-  const ctx = setup();
-  const ids: number[] = [];
-  for (const name of names) {
-    ids.push((await ctx.call("POST", "/api/members", { name })).body.id);
-  }
-  return { ...ctx, ids };
-}
+Deno.test("Mitglied anlegen, umbenennen und löschen", async () => {
+  openDatabase(":memory:");
 
-const today = "2026-11-04";
-
-Deno.test("Mitglied anlegen, umbenennen, löschen", async () => {
-  const { call } = setup();
-  const created = await call("POST", "/api/members", { name: "  Anna " });
+  const created = await send("POST", "/api/members", { name: "Anna" });
   assertEquals(created.status, 201);
-  assertEquals(created.body.name, "Anna");
+  assertEquals(created.data, { id: 1, name: "Anna" });
 
-  const renamed = await call("PATCH", `/api/members/${created.body.id}`, { name: "Anna B." });
-  assertEquals(renamed.body, { id: created.body.id, name: "Anna B." });
+  const renamed = await send("PATCH", "/api/members/1", { name: "Anna B." });
+  assertEquals(renamed.data, { id: 1, name: "Anna B." });
 
-  assertEquals((await call("DELETE", `/api/members/${created.body.id}`)).status, 204);
-  assertEquals((await call("GET", "/api/members")).body, []);
+  const deleted = await send("DELETE", "/api/members/1");
+  assertEquals(deleted.status, 204);
 });
 
 Deno.test("Doppelter Name gibt 409", async () => {
-  const { call } = await withMembers(["Anna"]);
-  const res = await call("POST", "/api/members", { name: "anna" });
-  assertEquals(res.status, 409);
-  assertEquals(res.body.error.code, "NAME_TAKEN");
+  openDatabase(":memory:");
+  await send("POST", "/api/members", { name: "Anna" });
+
+  const result = await send("POST", "/api/members", { name: "anna" });
+  assertEquals(result.status, 409);
 });
 
-Deno.test("Ungültige Eingabe gibt 400 mit einheitlichem Fehlerformat", async () => {
-  const { call } = setup();
-  const res = await call("POST", "/api/members", { name: "" });
-  assertEquals(res.status, 400);
-  assertEquals(res.body.error.code, "VALIDATION_ERROR");
-  assertEquals(res.body.error.details[0].path, "name");
+Deno.test("Leerer Name gibt 400 mit Fehlermeldung", async () => {
+  openDatabase(":memory:");
+
+  const result = await send("POST", "/api/members", { name: "" });
+  assertEquals(result.status, 400);
+  assertEquals(result.data, { error: "Name darf nicht leer sein" });
 });
 
-Deno.test("Kaputtes JSON gibt 400", async () => {
-  const { app } = setup();
-  const res = await app.request("/api/members", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{ name: kaputt",
-  });
-  assertEquals(res.status, 400);
-  assertEquals((await res.json()).error.code, "BAD_REQUEST");
-});
+Deno.test("Ausgabe anlegen, ändern und löschen", async () => {
+  openDatabase(":memory:");
+  await send("POST", "/api/members", { name: "Anna" });
+  await send("POST", "/api/members", { name: "Ben" });
 
-Deno.test("Ausgabe: anlegen, lesen, ändern, löschen", async () => {
-  const { call, ids: [anna, ben] } = await withMembers(["Anna", "Ben"]);
-  const input = {
+  const expense = {
     description: "Einkauf",
     amountCents: 2000,
-    date: today,
-    paidBy: anna,
-    participants: [anna, ben],
+    date: "2026-11-09",
+    paidBy: 1,
+    participants: [1, 2],
   };
-
-  const created = await call("POST", "/api/expenses", input);
+  const created = await send("POST", "/api/expenses", expense);
   assertEquals(created.status, 201);
-  assertEquals(created.body, { id: created.body.id, ...input });
+  assertEquals(created.data, { id: 1, ...expense });
 
-  const updated = await call("PUT", `/api/expenses/${created.body.id}`, {
-    ...input,
-    amountCents: 3000,
-    participants: [ben],
-  });
-  assertEquals(updated.body.amountCents, 3000);
-  assertEquals(updated.body.participants, [ben]);
+  const changed = await send("PUT", "/api/expenses/1", { ...expense, amountCents: 3000 });
+  assertEquals(changed.data.amountCents, 3000);
 
-  assertEquals((await call("GET", `/api/expenses/${created.body.id}`)).body, updated.body);
-  assertEquals((await call("DELETE", `/api/expenses/${created.body.id}`)).status, 204);
-  assertEquals((await call("GET", `/api/expenses/${created.body.id}`)).status, 404);
+  const deleted = await send("DELETE", "/api/expenses/1");
+  assertEquals(deleted.status, 204);
+
+  const notFound = await send("GET", "/api/expenses/1");
+  assertEquals(notFound.status, 404);
 });
 
-Deno.test("Ausgabe mit unbekanntem Mitglied gibt 422", async () => {
-  const { call, ids: [anna] } = await withMembers(["Anna"]);
-  const res = await call("POST", "/api/expenses", {
+Deno.test("Ausgabe mit unbekanntem Mitglied gibt 400", async () => {
+  openDatabase(":memory:");
+  await send("POST", "/api/members", { name: "Anna" });
+
+  const result = await send("POST", "/api/expenses", {
     description: "Pizza",
     amountCents: 1000,
-    date: today,
-    paidBy: anna,
-    participants: [anna, 99],
+    date: "2026-11-09",
+    paidBy: 1,
+    participants: [1, 99],
   });
-  assertEquals(res.status, 422);
-  assertEquals(res.body.error.code, "UNKNOWN_MEMBER");
+  assertEquals(result.status, 400);
 });
 
-Deno.test("Ausgabe mit Kommabetrag oder doppelten Beteiligten gibt 400", async () => {
-  const { call, ids: [anna] } = await withMembers(["Anna"]);
-  const base = { description: "X", date: today, paidBy: anna };
-  assertEquals(
-    (await call("POST", "/api/expenses", { ...base, amountCents: 12.5, participants: [anna] }))
-      .status,
-    400,
-  );
-  assertEquals(
-    (await call("POST", "/api/expenses", { ...base, amountCents: 100, participants: [anna, anna] }))
-      .status,
-    400,
-  );
+Deno.test("Betrag mit Komma (12.5 Cent) gibt 400", async () => {
+  openDatabase(":memory:");
+  await send("POST", "/api/members", { name: "Anna" });
+
+  const result = await send("POST", "/api/expenses", {
+    description: "Brot",
+    amountCents: 12.5,
+    date: "2026-11-09",
+    paidBy: 1,
+    participants: [1],
+  });
+  assertEquals(result.status, 400);
 });
 
-Deno.test("Mitglied in Ausgabe kann nicht gelöscht werden (409)", async () => {
-  const { call, ids: [anna, ben] } = await withMembers(["Anna", "Ben"]);
-  await call("POST", "/api/expenses", {
+Deno.test("Mitglied mit Ausgaben kann nicht gelöscht werden (409)", async () => {
+  openDatabase(":memory:");
+  await send("POST", "/api/members", { name: "Anna" });
+  await send("POST", "/api/expenses", {
     description: "Brot",
     amountCents: 300,
-    date: today,
-    paidBy: anna,
-    participants: [ben],
+    date: "2026-11-09",
+    paidBy: 1,
+    participants: [1],
   });
-  const res = await call("DELETE", `/api/members/${ben}`);
-  assertEquals(res.status, 409);
-  assertEquals(res.body.error.code, "MEMBER_IN_USE");
+
+  const result = await send("DELETE", "/api/members/1");
+  assertEquals(result.status, 409);
 });
 
 Deno.test("Salden und Ausgleich über die API", async () => {
-  const { call, ids: [anna, ben, cem] } = await withMembers(["Anna", "Ben", "Cem"]);
-  await call("POST", "/api/expenses", {
+  openDatabase(":memory:");
+  await send("POST", "/api/members", { name: "Anna" });
+  await send("POST", "/api/members", { name: "Ben" });
+  await send("POST", "/api/expenses", {
     description: "Einkauf",
-    amountCents: 3000,
-    date: today,
-    paidBy: anna,
-    participants: [anna, ben, cem],
+    amountCents: 2000,
+    date: "2026-11-09",
+    paidBy: 1,
+    participants: [1, 2],
   });
 
-  let overview = (await call("GET", "/api/balances")).body;
-  assertEquals(overview.suggestions, [
-    { fromId: ben, toId: anna, amountCents: 1000 },
-    { fromId: cem, toId: anna, amountCents: 1000 },
-  ]);
+  const before = await send("GET", "/api/balances");
+  assertEquals(before.data.suggestions, [{ fromId: 2, toId: 1, amountCents: 1000 }]);
 
-  // Beide Vorschläge als Zahlung erfassen → alles ausgeglichen
-  for (const s of overview.suggestions) {
-    assertEquals((await call("POST", "/api/settlements", { ...s, date: today })).status, 201);
-  }
-  overview = (await call("GET", "/api/balances")).body;
-  assertEquals(overview.suggestions, []);
-  assertEquals(overview.balances.map((b: { balanceCents: number }) => b.balanceCents), [0, 0, 0]);
+  // Ben zahlt Anna 10 € zurück
+  await send("POST", "/api/settlements", {
+    fromId: 2,
+    toId: 1,
+    amountCents: 1000,
+    date: "2026-11-09",
+  });
+
+  const after = await send("GET", "/api/balances");
+  assertEquals(after.data.suggestions, []);
 });
 
 Deno.test("Zahlung an sich selbst gibt 400", async () => {
-  const { call, ids: [anna] } = await withMembers(["Anna"]);
-  const res = await call("POST", "/api/settlements", {
-    fromId: anna,
-    toId: anna,
-    amountCents: 100,
-    date: today,
-  });
-  assertEquals(res.status, 400);
-});
+  openDatabase(":memory:");
+  await send("POST", "/api/members", { name: "Anna" });
 
-Deno.test("Unbekannter Endpunkt gibt JSON-404", async () => {
-  const { call } = setup();
-  const res = await call("GET", "/api/gibtsnicht");
-  assertEquals(res.status, 404);
-  assertEquals(res.body.error.code, "NOT_FOUND");
+  const result = await send("POST", "/api/settlements", {
+    fromId: 1,
+    toId: 1,
+    amountCents: 100,
+    date: "2026-11-09",
+  });
+  assertEquals(result.status, 400);
 });

@@ -1,50 +1,70 @@
+<!-- Startseite: Salden, Vorschläge "wer zahlt wem" und Rückzahlungen -->
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import { api } from '../api/client'
+import { addSettlement, deleteSettlement, getBalances, getMembers, getSettlements } from '../api'
 import BalanceList from '../components/BalanceList.vue'
-import ErrorMessage from '../components/ErrorMessage.vue'
 import SettlementList from '../components/SettlementList.vue'
 import SettlementSuggestions from '../components/SettlementSuggestions.vue'
-import { useMembers } from '../composables/useMembers'
-import { useRequest } from '../composables/useRequest'
-import type { BalanceOverview, Settlement, SettlementSuggestion } from '../types'
-import { formatCents, today } from '../utils/format'
+import { formatEuro, memberName, today } from '../format'
+import type { Balance, Member, Settlement, Suggestion } from '../types'
 
-const { members, loadMembers, nameOf } = useMembers()
-const { error, busy, run } = useRequest()
-
-const overview = ref<BalanceOverview>({ balances: [], suggestions: [] })
+const members = ref<Member[]>([])
+const balances = ref<Balance[]>([])
+const suggestions = ref<Suggestion[]>([])
 const settlements = ref<Settlement[]>([])
+const error = ref('')
 const loaded = ref(false)
 
-// Salden kommen fertig berechnet vom Backend. Das Frontend rechnet nichts selbst.
+// Lädt alle Daten vom Backend. Die Salden rechnet das Backend aus, nicht das Frontend.
 async function load() {
-  await run(async () => {
-    const [o, s] = await Promise.all([api.balances.get(), api.settlements.list(), loadMembers()])
-    overview.value = o
-    settlements.value = s
-  })
+  try {
+    members.value = await getMembers()
+    const result = await getBalances()
+    balances.value = result.balances
+    suggestions.value = result.suggestions
+    settlements.value = await getSettlements()
+    error.value = ''
+  } catch (e) {
+    error.value = (e as Error).message
+  }
   loaded.value = true
 }
 
-async function settle(s: SettlementSuggestion) {
-  const ok = confirm(`${nameOf(s.fromId)} hat ${nameOf(s.toId)} ${formatCents(s.amountCents)} gezahlt?`)
-  if (!ok) return
-  if (await run(() => api.settlements.create({ ...s, date: today() }))) await load()
+// "Erledigt" geklickt: Vorschlag als Rückzahlung speichern
+async function markAsPaid(s: Suggestion) {
+  const from = memberName(members.value, s.fromId)
+  const to = memberName(members.value, s.toId)
+  if (!confirm(from + ' hat ' + to + ' ' + formatEuro(s.amountCents) + ' gezahlt?')) {
+    return
+  }
+  try {
+    await addSettlement({ fromId: s.fromId, toId: s.toId, amountCents: s.amountCents, date: today() })
+    await load()
+  } catch (e) {
+    error.value = (e as Error).message
+  }
 }
 
 async function removeSettlement(s: Settlement) {
-  if (!confirm('Diese Rückzahlung löschen?')) return
-  if (await run(() => api.settlements.remove(s.id))) await load()
+  if (!confirm('Diese Rückzahlung löschen?')) {
+    return
+  }
+  try {
+    await deleteSettlement(s.id)
+    await load()
+  } catch (e) {
+    error.value = (e as Error).message
+  }
 }
 
+// Beim Öffnen der Seite Daten laden
 onMounted(load)
 </script>
 
 <template>
-  <ErrorMessage :message="error" />
+  <p v-if="error" class="error">{{ error }}</p>
 
+  <!-- Noch keine Mitglieder: Hinweis anzeigen -->
   <section v-if="loaded && members.length === 0" class="card">
     <h2>Willkommen!</h2>
     <p>Lege zuerst die Mitglieder deiner WG an.</p>
@@ -54,22 +74,17 @@ onMounted(load)
   <template v-else-if="loaded">
     <section class="card">
       <h2>Salden</h2>
-      <BalanceList :balances="overview.balances" />
+      <BalanceList :balances="balances" />
     </section>
 
     <section class="card">
       <h2>Wer zahlt wem?</h2>
-      <SettlementSuggestions
-        :suggestions="overview.suggestions"
-        :name-of="nameOf"
-        :busy="busy"
-        @settle="settle"
-      />
+      <SettlementSuggestions :suggestions="suggestions" :members="members" @done="markAsPaid" />
     </section>
 
     <section class="card">
       <h2>Rückzahlungen</h2>
-      <SettlementList :settlements="settlements" :name-of="nameOf" @remove="removeSettlement" />
+      <SettlementList :settlements="settlements" :members="members" @remove="removeSettlement" />
     </section>
   </template>
 </template>

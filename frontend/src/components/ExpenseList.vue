@@ -1,33 +1,41 @@
+<!-- Liste aller Ausgaben mit Knöpfen zum Bearbeiten und Löschen -->
 <script setup lang="ts">
-import type { Expense } from '../types'
-import { formatCents, formatDate } from '../utils/format'
+import { formatDate, formatEuro, memberName } from '../format'
+import type { Expense, Member } from '../types'
 
-defineProps<{
+const props = defineProps<{
   expenses: Expense[]
-  nameOf: (id: number) => string
+  members: Member[]
 }>()
 
 const emit = defineEmits<{
   edit: [expense: Expense]
   remove: [expense: Expense]
 }>()
+
+// "Anna, Ben, Cem"
+function participantNames(expense: Expense): string {
+  const names = expense.participants.map((id) => memberName(props.members, id))
+  return names.join(', ')
+}
 </script>
 
 <template>
-  <p v-if="expenses.length === 0" class="muted">Noch keine Ausgaben erfasst.</p>
+  <p v-if="expenses.length === 0" class="muted">Noch keine Ausgaben.</p>
+
   <ul v-else class="list">
-    <li v-for="e in expenses" :key="e.id" class="row">
+    <li v-for="expense in expenses" :key="expense.id" class="row">
       <div>
-        <strong>{{ e.description }}</strong>
+        <strong>{{ expense.description }}</strong>
         <small class="muted">
-          {{ formatDate(e.date) }} · bezahlt von {{ nameOf(e.paidBy) }}<br />
-          für {{ e.participants.map(nameOf).join(', ') }}
+          {{ formatDate(expense.date) }} · bezahlt von {{ memberName(members, expense.paidBy) }}
         </small>
+        <small class="muted">für {{ participantNames(expense) }}</small>
       </div>
       <span class="actions">
-        <span class="amount">{{ formatCents(e.amountCents) }}</span>
-        <button type="button" class="icon" title="Bearbeiten" @click="emit('edit', e)">✎</button>
-        <button type="button" class="icon danger" title="Löschen" @click="emit('remove', e)">✕</button>
+        <span class="amount">{{ formatEuro(expense.amountCents) }}</span>
+        <button type="button" class="icon" title="Bearbeiten" @click="emit('edit', expense)">✎</button>
+        <button type="button" class="icon danger" title="Löschen" @click="emit('remove', expense)">✕</button>
       </span>
     </li>
   </ul>

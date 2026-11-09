@@ -1,6 +1,5 @@
-// Datentypen der REST-API (Spiegel von backend/src/domain/types.ts).
-// Bewusst kopiert statt geteilt: Frontend und Backend bleiben unabhängig voneinander.
-// Alle Geldbeträge sind ganze Cent.
+// Die Datentypen, die die REST-API liefert (gleich wie im Backend).
+// Alle Geldbeträge sind ganze Cent: 1250 bedeutet 12,50 €.
 
 export interface Member {
   id: number
@@ -11,8 +10,7 @@ export interface Expense {
   id: number
   description: string
   amountCents: number
-  /** YYYY-MM-DD */
-  date: string
+  date: string // Format: JJJJ-MM-TT
   paidBy: number
   participants: number[]
 }
@@ -25,10 +23,7 @@ export interface Settlement {
   date: string
 }
 
-export type ExpenseInput = Omit<Expense, 'id'>
-export type SettlementInput = Omit<Settlement, 'id'>
-
-export interface MemberBalance {
+export interface Balance {
   memberId: number
   name: string
   paidCents: number
@@ -36,13 +31,8 @@ export interface MemberBalance {
   balanceCents: number
 }
 
-export interface SettlementSuggestion {
+export interface Suggestion {
   fromId: number
   toId: number
   amountCents: number
-}
-
-export interface BalanceOverview {
-  balances: MemberBalance[]
-  suggestions: SettlementSuggestion[]
 }

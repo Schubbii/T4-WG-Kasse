@@ -1,40 +1,44 @@
+<!-- Formular für eine neue Ausgabe oder zum Bearbeiten einer bestehenden -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import type { Expense, ExpenseInput, Member } from '../types'
-import { centsToInput, parseEuroToCents, today } from '../utils/format'
+import { ref } from 'vue'
+import { centsToText, euroToCents, today } from '../format'
+import type { Expense, Member } from '../types'
 
 const props = defineProps<{
   members: Member[]
-  /** Ausgabe zum Bearbeiten. Ohne Angabe wird eine neue Ausgabe angelegt. */
-  expense?: Expense | null
-  busy?: boolean
+  expense: Expense | null // null = neue Ausgabe, sonst die Ausgabe zum Bearbeiten
 }>()
 
 const emit = defineEmits<{
-  save: [input: ExpenseInput]
+  save: [data: Omit<Expense, 'id'>]
   cancel: []
 }>()
 
-// Startwerte: beim Bearbeiten aus der Ausgabe, sonst Standardwerte.
-// Der Elternteil setzt einen neuen :key, damit das Formular frisch startet.
-const description = ref(props.expense?.description ?? '')
-const amount = ref(props.expense ? centsToInput(props.expense.amountCents) : '')
-const date = ref(props.expense?.date ?? today())
-const paidBy = ref<number | null>(props.expense?.paidBy ?? props.members[0]?.id ?? null)
-const participants = ref<number[]>(
-  props.expense ? [...props.expense.participants] : props.members.map((m) => m.id),
-)
+// Die Eingabefelder. Beim Bearbeiten werden sie mit den alten Werten gefüllt.
+const description = ref('')
+const amount = ref('')
+const date = ref(today())
+const paidBy = ref(props.members[0]?.id)
+const participants = ref(props.members.map((m) => m.id)) // standardmäßig alle
 
-const amountCents = computed(() => parseEuroToCents(amount.value))
-const formError = ref<string | null>(null)
+if (props.expense) {
+  description.value = props.expense.description
+  amount.value = centsToText(props.expense.amountCents)
+  date.value = props.expense.date
+  paidBy.value = props.expense.paidBy
+  participants.value = [...props.expense.participants]
+}
+
+const formError = ref('')
 
 function submit() {
-  // Schnelle Prüfung für direkte Rückmeldung. Die verbindliche Prüfung macht das Backend.
-  if (amountCents.value === null || amountCents.value <= 0) {
+  // Schnelle Prüfung im Browser. Die eigentliche Prüfung macht das Backend.
+  const amountCents = euroToCents(amount.value)
+  if (isNaN(amountCents) || amountCents <= 0) {
     formError.value = 'Bitte einen gültigen Betrag eingeben, z. B. 12,50'
     return
   }
-  if (paidBy.value === null) {
+  if (paidBy.value === undefined) {
     formError.value = 'Bitte auswählen, wer bezahlt hat'
     return
   }
@@ -42,20 +46,22 @@ function submit() {
     formError.value = 'Bitte mindestens eine Person auswählen'
     return
   }
-  formError.value = null
+
+  formError.value = ''
   emit('save', {
-    description: description.value.trim(),
-    amountCents: amountCents.value,
+    description: description.value,
+    amountCents: amountCents,
     date: date.value,
     paidBy: paidBy.value,
-    participants: [...participants.value],
+    participants: participants.value,
   })
 }
 </script>
 
 <template>
   <form class="card form" @submit.prevent="submit">
-    <h2>{{ expense ? 'Ausgabe bearbeiten' : 'Neue Ausgabe' }}</h2>
+    <h2 v-if="expense">Ausgabe bearbeiten</h2>
+    <h2 v-else>Neue Ausgabe</h2>
 
     <label>
       Wofür?
@@ -82,17 +88,20 @@ function submit() {
 
     <fieldset>
       <legend>Aufgeteilt auf</legend>
+      <!-- v-model mit einer Liste: angehakte IDs landen in "participants" -->
       <label v-for="m in members" :key="m.id" class="checkbox">
         <input v-model="participants" type="checkbox" :value="m.id" />
         {{ m.name }}
       </label>
     </fieldset>
 
-    <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+    <p v-if="formError" class="error">{{ formError }}</p>
 
     <div class="actions">
-      <button type="submit" :disabled="busy">{{ expense ? 'Änderung speichern' : 'Speichern' }}</button>
-      <button v-if="expense" type="button" class="secondary" @click="emit('cancel')">Abbrechen</button>
+      <button type="submit">Speichern</button>
+      <button v-if="expense" type="button" class="secondary" @click="emit('cancel')">
+        Abbrechen
+      </button>
     </div>
   </form>
 </template>

@@ -22,6 +22,6 @@ API und Rechenlogik. Nur die Anzeige im Frontend rechnet in Euro um.
   das Ganzzahlen schon lösen.
 
 ## Konsequenzen
-- Das Frontend wandelt Eingaben wie „12,50“ in Cent um (`parseEuroToCents`). Dabei wird
-  über Text gerechnet, nicht über Kommazahlen.
+- Das Frontend wandelt Eingaben wie „12,50“ in Cent um (`euroToCents` in `format.ts`).
+  `Math.round` gleicht dabei kleine Rechenungenauigkeiten aus (0,29 × 100 = 28,999…).
 - Wer die API direkt nutzt, muss Cent schicken. Das steht in der API-Doku.

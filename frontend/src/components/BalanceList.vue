@@ -1,23 +1,27 @@
+<!-- Zeigt für jedes Mitglied den Saldo: grün = bekommt Geld, rot = schuldet Geld -->
 <script setup lang="ts">
-import type { MemberBalance } from '../types'
-import { formatCents } from '../utils/format'
+import { formatEuro } from '../format'
+import type { Balance } from '../types'
 
-defineProps<{ balances: MemberBalance[] }>()
+defineProps<{ balances: Balance[] }>()
 </script>
 
 <template>
   <ul class="list">
-    <li v-for="b in balances" :key="b.memberId" class="row">
+    <li v-for="balance in balances" :key="balance.memberId" class="row">
       <div>
-        <strong>{{ b.name }}</strong>
-        <small class="muted">bezahlt {{ formatCents(b.paidCents) }} · Anteil {{ formatCents(b.shareCents) }}</small>
+        <strong>{{ balance.name }}</strong>
+        <small class="muted">
+          bezahlt {{ formatEuro(balance.paidCents) }} · Anteil {{ formatEuro(balance.shareCents) }}
+        </small>
       </div>
-      <span
-        class="amount"
-        :class="{ positive: b.balanceCents > 0, negative: b.balanceCents < 0 }"
-      >
-        {{ b.balanceCents > 0 ? '+' : '' }}{{ formatCents(b.balanceCents) }}
+      <span v-if="balance.balanceCents > 0" class="amount positive">
+        +{{ formatEuro(balance.balanceCents) }}
       </span>
+      <span v-else-if="balance.balanceCents < 0" class="amount negative">
+        {{ formatEuro(balance.balanceCents) }}
+      </span>
+      <span v-else class="amount">{{ formatEuro(0) }}</span>
     </li>
   </ul>
 </template>

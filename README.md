@@ -66,31 +66,24 @@ Dann <http://localhost:8000> öffnen.
 cd backend && deno task test
 ```
 
-### Einstellungen (optional)
-
-| Variable | Standard | Bedeutung |
-|---|---|---|
-| `PORT` | `8000` | Port des Backends |
-| `DB_PATH` | `wg-kasse.db` | Pfad der SQLite-Datei |
-| `STATIC_DIR` | `../frontend/dist` | Ordner mit dem gebauten Frontend |
-
 ## Projektstruktur
 
 ```
 backend/
-  main.ts                 Einstieg: DB öffnen, App bauen, Server starten
-  src/app.ts              Verdrahtung: Repositories → Services → Routes
-  src/routes/             HTTP-Schicht (Hono), eine Datei pro Ressource
-  src/services/           Geschäftslogik und fachliche Prüfungen
-  src/domain/             Fachliche Typen und reine Rechenlogik (Salden, Ausgleich)
-  src/repositories/       Datenhaltung (Interfaces + SQLite-Umsetzung)
-  src/http/               Validierung (Zod) und einheitliche Fehlerbehandlung
-  tests/                  Unit-Tests der Rechenlogik, API-Tests
+  main.ts                 Start: Datenbank öffnen, Frontend ausliefern, Server starten
+  src/app.ts              Hono-App: bindet die Routen ein, zentrale Fehlerbehandlung
+  src/routes/             Eine Datei pro Ressource: prüfen, speichern, antworten
+  src/schemas.ts          Validierung mit Zod
+  src/database.ts         SQLite: Tabellen und alle SQL-Befehle
+  src/balance.ts          Rechenlogik: aufteilen, Salden, Ausgleich
+  src/types.ts            Datentypen
+  tests/                  Tests für Rechenlogik und API
 frontend/
-  src/api/client.ts       Einzige Stelle mit fetch-Aufrufen
-  src/views/              Drei Ansichten: Übersicht, Ausgaben, Mitglieder
-  src/components/         Wiederverwendbare Bausteine (Formular, Listen)
-  src/composables/        useRequest (Laden/Fehler), useMembers
+  src/api.ts              Alle Anfragen ans Backend (fetch)
+  src/views/              Drei Seiten: Übersicht, Ausgaben, Mitglieder
+  src/components/         Bausteine der Seiten (Formular, Listen)
+  src/format.ts           Hilfsfunktionen für Euro und Datum
+  src/router.ts           Welche Adresse zeigt welche Seite
 docs/
   api.md                  REST-API
   architektur.md          Aufbau und Datenfluss

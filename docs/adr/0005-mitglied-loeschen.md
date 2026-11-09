@@ -8,13 +8,13 @@ Würde man es einfach löschen, würden sich die Salden der anderen nachträglic
 oder Daten würden auf ein nicht mehr existierendes Mitglied zeigen.
 
 ## Entscheidung
-`DELETE /api/members/:id` antwortet mit **409 `MEMBER_IN_USE`**, solange das Mitglied
+`DELETE /api/members/:id` antwortet mit **409**, solange das Mitglied
 irgendwo vorkommt. Ein Mitglied ohne Buchungen (z. B. falsch angelegt) kann gelöscht werden.
 
 ## Begründung
 - Einfach umzusetzen und zu erklären.
 - Die Abrechnung bleibt nachvollziehbar, es verschwindet nichts unbemerkt.
-- Die Prüfung liegt im Service (fachliche Regel). Zusätzlich verhindern die
+- Die Route prüft das mit `isMemberUsed()`. Zusätzlich verhindern die
   Fremdschlüssel in SQLite ungültige Verweise.
 
 ## Verworfene Alternativen

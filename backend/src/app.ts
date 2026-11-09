@@ -1,57 +1,32 @@
-// Baut die Hono-App zusammen: Repositories → Services → Routes.
-// Die Abhängigkeiten werden von außen übergeben. So nutzen die Tests
-// eine In-Memory-Datenbank und main.ts eine Datei.
+// Die Hono-App: verbindet alle Routen und behandelt Fehler an einer Stelle.
 
 import { Hono } from "@hono/hono";
-import { serveStatic } from "@hono/hono/deno";
-import { logger } from "@hono/hono/logger";
-import { handleError } from "./http/errors.ts";
-import type { Repositories } from "./repositories/types.ts";
+import { HTTPException } from "@hono/hono/http-exception";
 import { balanceRoutes } from "./routes/balances.ts";
 import { expenseRoutes } from "./routes/expenses.ts";
 import { memberRoutes } from "./routes/members.ts";
 import { settlementRoutes } from "./routes/settlements.ts";
-import { createBalanceService } from "./services/balance_service.ts";
-import { createExpenseService } from "./services/expense_service.ts";
-import { createMemberService } from "./services/member_service.ts";
-import { createSettlementService } from "./services/settlement_service.ts";
 
-export interface AppOptions {
-  repos: Repositories;
-  /** Ordner mit dem gebauten Frontend (vite build). Ohne Angabe nur die API. */
-  staticDir?: string;
-  /** Request-Log in der Konsole */
-  log?: boolean;
-}
+export const app = new Hono();
 
-export function createApp({ repos, staticDir, log = false }: AppOptions) {
-  const app = new Hono();
-  if (log) app.use(logger());
+app.route("/api/members", memberRoutes);
+app.route("/api/expenses", expenseRoutes);
+app.route("/api/settlements", settlementRoutes);
+app.route("/api/balances", balanceRoutes);
 
-  const api = new Hono()
-    .route("/members", memberRoutes(createMemberService(repos.members)))
-    .route("/expenses", expenseRoutes(createExpenseService(repos.expenses, repos.members)))
-    .route(
-      "/settlements",
-      settlementRoutes(createSettlementService(repos.settlements, repos.members)),
-    )
-    .route("/balances", balanceRoutes(createBalanceService(repos)));
+// Unbekannte API-Adresse
+app.all("/api/*", (c) => {
+  return c.json({ error: "Endpunkt nicht gefunden" }, 404);
+});
 
-  app.route("/api", api);
-
-  // Unbekannte API-Pfade bekommen JSON statt der Frontend-Seite.
-  app.all(
-    "/api/*",
-    (c) => c.json({ error: { code: "NOT_FOUND", message: "Endpunkt nicht gefunden" } }, 404),
-  );
-
-  if (staticDir) {
-    // Frontend-Dateien ausliefern. Alle anderen Pfade bekommen index.html,
-    // damit der Vue Router auch bei direktem Aufruf einer URL funktioniert.
-    app.use("/*", serveStatic({ root: staticDir }));
-    app.get("*", serveStatic({ path: `${staticDir}/index.html` }));
+// Zentrale Fehlerbehandlung. Jeder Fehler wird zu einer JSON-Antwort:
+// { "error": "Fehlermeldung" }
+app.onError((error, c) => {
+  if (error instanceof HTTPException) {
+    // Fehler, die wir selbst mit "throw new HTTPException(...)" auslösen
+    return c.json({ error: error.message }, error.status);
   }
-
-  app.onError(handleError);
-  return app;
-}
+  // Unerwarteter Fehler: im Terminal ausgeben, dem Nutzer nur eine allgemeine Meldung zeigen
+  console.error(error);
+  return c.json({ error: "Interner Serverfehler" }, 500);
+});

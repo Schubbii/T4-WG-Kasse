@@ -8,8 +8,7 @@ Zur Wahl stehen Vue Router für die Navigation und Pinia als zentraler Zustandss
 
 ## Entscheidung
 - **Vue Router:** ja.
-- **Pinia:** nein. Jede Ansicht lädt ihre Daten über den API-Client, gemeinsame Logik
-  liegt in Composables (`useRequest`, `useMembers`).
+- **Pinia:** nein. Jede Seite lädt ihre Daten selbst über `api.ts`.
 
 ## Begründung
 **Vue Router**
@@ -23,10 +22,11 @@ Zur Wahl stehen Vue Router für die Navigation und Pinia als zentraler Zustandss
 - Die Daten gehören dem Backend. Das Frontend hält nur eine Kopie für die Anzeige
   und lädt nach jeder Änderung neu. Ein zentraler Store würde eine zweite Wahrheit
   einführen, die man synchron halten muss.
-- Composables mit der Composition API reichen für die geteilte Logik.
+- Pinia wäre eine weitere Bibliothek, die man lernen und erklären muss, ohne dass die App
+  dadurch etwas Neues kann.
 
 ## Konsequenzen
 - Beim Wechsel der Ansicht wird neu geladen. Bei einer kleinen WG-App sind das wenige
   kleine Anfragen.
 - Das Backend liefert für unbekannte Pfade `index.html` aus, damit Direktaufrufe wie
-  `/ausgaben` funktionieren (siehe `app.ts`).
+  `/ausgaben` funktionieren (siehe `main.ts`).

@@ -26,7 +26,7 @@ und Fremdschlüssel. „Kommt Mitglied X in irgendeiner Ausgabe vor?“ müsste 
 TypeScript über alle Einträge prüfen oder mit zusätzlichen Index-Schlüsseln selbst pflegen.
 
 ## Konsequenzen
-- Im Repository steht SQL. Das ist die einzige Stelle (`repositories/sqlite.ts`).
-- Die Services kennen nur die Interfaces in `repositories/types.ts`. Ein Wechsel zu
-  Deno KV hieße: eine neue Datei mit denselben Methoden, Services und Routes bleiben gleich.
+- Alles SQL steht in einer Datei (`src/database.ts`). Die Routen rufen nur deren Funktionen
+  auf, z. B. `getMembers()`. Ein Wechsel zu Deno KV hieße: nur `database.ts` neu schreiben,
+  mit denselben Funktionsnamen. Routen und Rechenlogik bleiben gleich.
 - Die Datenbank ist eine einzelne Datei (`wg-kasse.db`), leicht zu sichern oder zurückzusetzen.

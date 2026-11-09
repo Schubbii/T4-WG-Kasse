@@ -22,4 +22,4 @@ Login pro Mitglied (Cookie-Session, gehashte Passwörter). Sinnvoll, sobald die 
 ## Konsequenzen
 - **Nicht öffentlich betreiben.** Jeder mit Zugriff kann Daten ändern oder löschen.
 - Nachrüsten ist möglich, ohne die Fachlogik zu ändern: eine Hono-Middleware vor `/api`
-  prüft die Session. Routes, Services und Repositories bleiben gleich.
+  prüft die Session. Routen, Datenbank und Rechenlogik bleiben gleich.

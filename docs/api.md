@@ -34,7 +34,7 @@ Das Ausgabe-Formular schickt immer alle Felder, daher PUT (vollständiges Ersetz
 ```
 
 Eingabe (POST, PATCH): `{ "name": "Anna" }`. 1 bis 40 Zeichen, Leerzeichen am Rand werden entfernt.
-Namen müssen eindeutig sein (Groß-/Kleinschreibung egal).
+Namen müssen eindeutig sein (Groß-/Kleinschreibung egal), sonst 409.
 
 ### Ausgabe
 
@@ -96,29 +96,15 @@ Bedeutung: Mitglied `fromId` hat Mitglied `toId` den Betrag überwiesen.
 Alle Fehler haben dasselbe Format:
 
 ```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Betrag muss größer als 0 sein",
-    "details": [{ "path": "amountCents", "message": "Betrag muss größer als 0 sein" }]
-  }
-}
+{ "error": "Betrag muss größer als 0 sein" }
 ```
 
-`details` gibt es nur bei Validierungsfehlern.
-
-| Status | Code | Wann |
-|---|---|---|
-| 400 | `VALIDATION_ERROR` | Eingabe hat das falsche Format (Zod) |
-| 400 | `BAD_REQUEST` | Body ist kein gültiges JSON |
-| 404 | `NOT_FOUND` | Ressource oder Endpunkt existiert nicht |
-| 409 | `NAME_TAKEN` | Mitgliedsname ist schon vergeben |
-| 409 | `MEMBER_IN_USE` | Mitglied kommt in Ausgaben/Rückzahlungen vor und kann nicht gelöscht werden |
-| 422 | `UNKNOWN_MEMBER` | Format stimmt, aber ein angegebenes Mitglied existiert nicht |
-| 500 | `INTERNAL_ERROR` | Unerwarteter Serverfehler |
-
-**400 oder 422?** 400 heißt „die Anfrage ist formal falsch“ (prüft Zod ohne Datenbank).
-422 heißt „formal richtig, aber fachlich nicht verarbeitbar“ (prüft der Service mit Datenbank).
+| Status | Wann |
+|---|---|
+| 400 | Eingabe ist ungültig: falsches Format (prüft Zod), kein gültiges JSON, Mitglied existiert nicht, Person doppelt ausgewählt, Zahlung an sich selbst |
+| 404 | Ressource oder Endpunkt existiert nicht |
+| 409 | Konflikt: Name schon vergeben, oder Mitglied kommt in Ausgaben/Rückzahlungen vor und kann nicht gelöscht werden |
+| 500 | Unerwarteter Serverfehler |
 
 ## Beispiele mit curl
 

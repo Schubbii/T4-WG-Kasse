@@ -1,47 +1,53 @@
+<!-- Seite "Ausgaben": Formular oben, Liste darunter -->
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import { api } from '../api/client'
-import ErrorMessage from '../components/ErrorMessage.vue'
+import { addExpense, deleteExpense, getExpenses, getMembers, updateExpense } from '../api'
 import ExpenseForm from '../components/ExpenseForm.vue'
 import ExpenseList from '../components/ExpenseList.vue'
-import { useMembers } from '../composables/useMembers'
-import { useRequest } from '../composables/useRequest'
-import type { Expense, ExpenseInput } from '../types'
+import type { Expense, Member } from '../types'
 
-const { members, loadMembers, nameOf } = useMembers()
-const { error, busy, run } = useRequest()
-
+const members = ref<Member[]>([])
 const expenses = ref<Expense[]>([])
-const editing = ref<Expense | null>(null)
+const editing = ref<Expense | null>(null) // die Ausgabe, die gerade bearbeitet wird
+const error = ref('')
 const loaded = ref(false)
-// Neuer Key → Formular wird neu aufgebaut und dadurch geleert.
+
+// Ändert sich der "key" einer Komponente, baut Vue sie neu auf.
+// So wird das Formular nach dem Speichern wieder leer.
 const formKey = ref(0)
 
 async function load() {
-  await run(async () => {
-    const [list] = await Promise.all([api.expenses.list(), loadMembers()])
-    expenses.value = list
-  })
+  try {
+    members.value = await getMembers()
+    expenses.value = await getExpenses()
+  } catch (e) {
+    error.value = (e as Error).message
+  }
   loaded.value = true
 }
 
-// Datenfluss "Speichern": Formular → save() → API-Client → POST/PUT /api/expenses → Liste neu laden
-async function save(input: ExpenseInput) {
-  const id = editing.value?.id
-  const ok = await run(() =>
-    id === undefined ? api.expenses.create(input) : api.expenses.update(id, input),
-  )
-  if (!ok) return // Fehler wird über ErrorMessage angezeigt, Eingaben bleiben erhalten
-  editing.value = null
-  formKey.value++
-  await load()
+// Wird aufgerufen, wenn im Formular auf "Speichern" geklickt wird.
+async function save(data: Omit<Expense, 'id'>) {
+  try {
+    if (editing.value) {
+      await updateExpense(editing.value.id, data) // PUT /api/expenses/:id
+    } else {
+      await addExpense(data) // POST /api/expenses
+    }
+    error.value = ''
+    editing.value = null
+    formKey.value++ // Formular leeren
+    await load() // Liste neu laden
+  } catch (e) {
+    // Fehler vom Backend anzeigen. Die Eingaben im Formular bleiben erhalten.
+    error.value = (e as Error).message
+  }
 }
 
-function startEdit(e: Expense) {
-  editing.value = e
-  formKey.value++
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+function startEdit(expense: Expense) {
+  editing.value = expense
+  formKey.value++ // Formular mit den Werten dieser Ausgabe neu aufbauen
+  window.scrollTo(0, 0)
 }
 
 function cancelEdit() {
@@ -49,18 +55,26 @@ function cancelEdit() {
   formKey.value++
 }
 
-async function remove(e: Expense) {
-  if (!confirm(`„${e.description}“ löschen?`)) return
-  if (!(await run(() => api.expenses.remove(e.id)))) return
-  if (editing.value?.id === e.id) cancelEdit()
-  await load()
+async function remove(expense: Expense) {
+  if (!confirm('"' + expense.description + '" löschen?')) {
+    return
+  }
+  try {
+    await deleteExpense(expense.id)
+    if (editing.value?.id === expense.id) {
+      cancelEdit()
+    }
+    await load()
+  } catch (e) {
+    error.value = (e as Error).message
+  }
 }
 
 onMounted(load)
 </script>
 
 <template>
-  <ErrorMessage :message="error" />
+  <p v-if="error" class="error">{{ error }}</p>
 
   <section v-if="loaded && members.length === 0" class="card">
     <p>Bevor du Ausgaben erfassen kannst, braucht die WG Mitglieder.</p>
@@ -72,14 +86,13 @@ onMounted(load)
       :key="formKey"
       :members="members"
       :expense="editing"
-      :busy="busy"
       @save="save"
       @cancel="cancelEdit"
     />
 
     <section class="card">
       <h2>Alle Ausgaben</h2>
-      <ExpenseList :expenses="expenses" :name-of="nameOf" @edit="startEdit" @remove="remove" />
+      <ExpenseList :expenses="expenses" :members="members" @edit="startEdit" @remove="remove" />
     </section>
   </template>
 </template>

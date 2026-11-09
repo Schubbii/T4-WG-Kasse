@@ -1,30 +1,15 @@
-// Einstiegspunkt: Datenbank öffnen, App bauen, Server starten.
+// Startpunkt des Backends: Datenbank öffnen, Frontend ausliefern, Server starten.
 
-import { createApp } from "./src/app.ts";
-import { openDatabase } from "./src/db.ts";
-import { createSqliteRepositories } from "./src/repositories/sqlite.ts";
+import { serveStatic } from "@hono/hono/deno";
+import { app } from "./src/app.ts";
+import { openDatabase } from "./src/database.ts";
 
-const port = Number(Deno.env.get("PORT") ?? 8000);
-const dbPath = Deno.env.get("DB_PATH") ?? "wg-kasse.db";
-const staticDir = Deno.env.get("STATIC_DIR") ?? "../frontend/dist";
+openDatabase("wg-kasse.db");
 
-function dirExists(path: string): boolean {
-  try {
-    return Deno.statSync(path).isDirectory;
-  } catch {
-    return false;
-  }
-}
+// Das gebaute Frontend (npm run build) liegt in ../frontend/dist.
+// Alle Adressen, die keine Datei sind, bekommen index.html. So funktioniert
+// der Vue Router auch, wenn man z. B. /ausgaben direkt im Browser aufruft.
+app.use("/*", serveStatic({ root: "../frontend/dist" }));
+app.get("*", serveStatic({ path: "../frontend/dist/index.html" }));
 
-const db = openDatabase(dbPath);
-const app = createApp({
-  repos: createSqliteRepositories(db),
-  staticDir: dirExists(staticDir) ? staticDir : undefined,
-  log: true,
-});
-
-if (!dirExists(staticDir)) {
-  console.log(`Kein Frontend-Build in ${staticDir} gefunden. Es läuft nur die API.`);
-}
-
-Deno.serve({ port }, app.fetch);
+Deno.serve({ port: 8000 }, app.fetch);

@@ -10,7 +10,7 @@ Außerdem: Rechnet das Frontend oder das Backend?
 
 ## Entscheidung
 Salden und Ausgleichsvorschläge werden bei jedem `GET /api/balances` im Backend
-neu berechnet (`domain/balance.ts`). Sie werden nicht gespeichert.
+neu berechnet (`src/balance.ts`). Sie werden nicht gespeichert.
 
 ## Begründung
 - **Immer korrekt:** Ausgaben bearbeiten oder löschen ändert die Salden automatisch.

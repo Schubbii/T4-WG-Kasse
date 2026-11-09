@@ -1,22 +1,77 @@
-import { Hono } from "@hono/hono";
-import { expenseSchema, idParamSchema, validate } from "../http/validation.ts";
-import type { ExpenseService } from "../services/expense_service.ts";
+// Endpunkte für Ausgaben: /api/expenses
 
-export function expenseRoutes(service: ExpenseService) {
-  return new Hono()
-    .get("/", async (c) => c.json(await service.list()))
-    .get("/:id", validate("param", idParamSchema), async (c) => {
-      return c.json(await service.get(c.req.valid("param").id));
-    })
-    .post("/", validate("json", expenseSchema), async (c) => {
-      return c.json(await service.create(c.req.valid("json")), 201);
-    })
-    // PUT, weil das Formular immer die komplette Ausgabe schickt.
-    .put("/:id", validate("param", idParamSchema), validate("json", expenseSchema), async (c) => {
-      return c.json(await service.update(c.req.valid("param").id, c.req.valid("json")));
-    })
-    .delete("/:id", validate("param", idParamSchema), async (c) => {
-      await service.delete(c.req.valid("param").id);
-      return c.body(null, 204);
-    });
+import { Hono } from "@hono/hono";
+import { HTTPException } from "@hono/hono/http-exception";
+import { zValidator } from "@hono/zod-validator";
+import {
+  addExpense,
+  deleteExpense,
+  getExpense,
+  getExpenses,
+  getMember,
+  updateExpense,
+} from "../database.ts";
+import { expenseSchema, onInvalid } from "../schemas.ts";
+import type { Expense } from "../types.ts";
+
+export const expenseRoutes = new Hono();
+
+// Prüfungen, für die man die Datenbank braucht. Zod kann das nicht prüfen.
+function checkExpense(data: Omit<Expense, "id">) {
+  const memberIds = [data.paidBy, ...data.participants];
+  for (const id of memberIds) {
+    if (!getMember(id)) {
+      throw new HTTPException(400, { message: `Mitglied mit ID ${id} existiert nicht` });
+    }
+  }
+  // Ein Set enthält jeden Wert nur einmal. Ist es kürzer, gab es doppelte IDs.
+  if (new Set(data.participants).size !== data.participants.length) {
+    throw new HTTPException(400, { message: "Eine Person ist doppelt ausgewählt" });
+  }
 }
+
+// Alle Ausgaben auflisten (neueste zuerst)
+expenseRoutes.get("/", (c) => {
+  return c.json(getExpenses());
+});
+
+// Eine Ausgabe anzeigen
+expenseRoutes.get("/:id", (c) => {
+  const expense = getExpense(Number(c.req.param("id")));
+  if (!expense) {
+    throw new HTTPException(404, { message: "Ausgabe nicht gefunden" });
+  }
+  return c.json(expense);
+});
+
+// Neue Ausgabe anlegen
+expenseRoutes.post("/", zValidator("json", expenseSchema, onInvalid), (c) => {
+  const data = c.req.valid("json");
+  checkExpense(data);
+  const expense = addExpense(data);
+  return c.json(expense, 201);
+});
+
+// Ausgabe ändern. PUT, weil das Formular immer alle Felder schickt.
+expenseRoutes.put("/:id", zValidator("json", expenseSchema, onInvalid), (c) => {
+  const id = Number(c.req.param("id"));
+  const data = c.req.valid("json");
+
+  if (!getExpense(id)) {
+    throw new HTTPException(404, { message: "Ausgabe nicht gefunden" });
+  }
+  checkExpense(data);
+
+  const expense = updateExpense(id, data);
+  return c.json(expense);
+});
+
+// Ausgabe löschen
+expenseRoutes.delete("/:id", (c) => {
+  const id = Number(c.req.param("id"));
+  if (!getExpense(id)) {
+    throw new HTTPException(404, { message: "Ausgabe nicht gefunden" });
+  }
+  deleteExpense(id);
+  return c.body(null, 204);
+});

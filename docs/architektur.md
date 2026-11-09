@@ -3,89 +3,88 @@
 ## Überblick
 
 ```
-┌──────────────── Browser ────────────────┐        ┌──────────────── Deno-Server ────────────────┐
-│ Views  →  Components                     │        │ Routes (Hono)                                │
-│   │                                      │  HTTP  │   │  Validierung (Zod) → 400                 │
-│   └→ api/client.ts  ── fetch /api/... ───┼──JSON──┼→  ▼                                          │
-│                                          │        │ Services  (Geschäftslogik, Fachregeln)       │
-│                                          │        │   │  domain/balance.ts (reine Rechenlogik)   │
-│                                          │        │   ▼                                          │
-│                                          │        │ Repositories (Interface) → SQLite            │
-└──────────────────────────────────────────┘        └──────────────────────────────────────────────┘
+Browser (Vue)                                Deno-Server (Hono)
+─────────────                                ──────────────────
+views/  (Seiten)                             routes/      prüfen, speichern, antworten
+  │                                            │  schemas.ts   Format prüfen (Zod)
+  ├→ components/  (Anzeige, Eingabe)           │  balance.ts   Salden berechnen
+  │                                            ▼
+  └→ api.ts  ── fetch /api/... (JSON) ──→    database.ts  SQL → SQLite-Datei
 ```
 
 Frontend und Backend sind **entkoppelt**: Sie kennen sich nur über die REST-API ([api.md](api.md)).
 
-## Backend-Schichten
+## Backend
 
-| Schicht | Ordner | Aufgabe | Kennt |
-|---|---|---|---|
-| Routes | `src/routes/` | HTTP: Pfade, Statuscodes, JSON | Services, Validierung |
-| Validierung | `src/http/validation.ts` | Format prüfen (Typ, Länge, Pflichtfelder) | Zod |
-| Services | `src/services/` | Fachregeln (Mitglied existiert? Name frei? Darf gelöscht werden?) | Repository-Interfaces |
-| Domain | `src/domain/` | Typen und reine Rechenlogik (Aufteilen, Salden, Ausgleich) | nichts |
-| Repositories | `src/repositories/` | Speichern und Laden | SQLite |
+| Datei | Aufgabe |
+|---|---|
+| `main.ts` | Startet alles: Datenbank öffnen, Frontend ausliefern, Server auf Port 8000 |
+| `src/app.ts` | Bindet die Routen unter `/api/...` ein. Zentrale Fehlerbehandlung. |
+| `src/routes/*.ts` | Eine Datei pro Ressource. Jede Route: Eingabe prüfen → Datenbank-Funktion aufrufen → JSON zurückgeben |
+| `src/schemas.ts` | Zod-Schemas: Wie sieht eine gültige Eingabe aus? |
+| `src/database.ts` | Tabellen anlegen und alle SQL-Befehle. Sonst steht nirgends SQL. |
+| `src/balance.ts` | Rechenlogik ohne Datenbank und HTTP: aufteilen, Salden, Ausgleich |
+| `src/types.ts` | Datentypen (Member, Expense, Settlement, ...) |
 
-Regel: Jede Schicht ruft nur die darunter auf. Die Rechenlogik in `domain/` hat
-keine Abhängigkeiten und ist deshalb einfach testbar.
+**Zwei Arten von Prüfungen:**
+1. **Format** (Zod in `schemas.ts`): Ist der Betrag eine ganze Zahl? Ist der Name nicht leer?
+   Dafür braucht man keine Datenbank.
+2. **Fachliche Regeln** (in den Routen): Gibt es das Mitglied? Ist der Name schon vergeben?
+   Darf das Mitglied gelöscht werden? Dafür fragt die Route die Datenbank.
 
-Fehler werden als `AppError` geworfen und zentral in `src/http/errors.ts` in das
-einheitliche JSON-Fehlerformat übersetzt.
+**Fehler:** Eine Route wirft `new HTTPException(status, { message })`. Die Fehlerbehandlung
+in `app.ts` macht daraus immer dieselbe Antwort: `{ "error": "Meldung" }`.
 
-## Frontend-Aufbau
+## Frontend
 
 | Teil | Aufgabe |
 |---|---|
-| `views/` | Eine Datei pro Seite. Lädt Daten, reagiert auf Events der Komponenten. |
-| `components/` | Anzeige und Eingabe. Bekommen Daten über Props, melden Aktionen über Events. Rufen nie selbst die API auf. |
-| `api/client.ts` | Einzige Stelle mit `fetch`. Übersetzt Fehlerantworten in `ApiError`. |
-| `composables/` | `useRequest`: Ladezustand und Fehlermeldung. `useMembers`: Mitglieder laden, Namen nachschlagen. |
-| `utils/format.ts` | Euro ↔ Cent, Datumsformat |
+| `views/` | Eine Datei pro Seite. Lädt Daten über `api.ts` und reagiert auf Klicks in den Komponenten. |
+| `components/` | Zeigen Daten an (über Props) und melden Klicks nach oben (über Events). Sprechen nie selbst mit dem Backend. |
+| `api.ts` | Einzige Stelle mit `fetch`. Wirft bei einem Fehler die Meldung des Backends. |
+| `format.ts` | Euro ↔ Cent, Datum anzeigen, Namen zu einer ID suchen |
+| `router.ts` | Ordnet Adressen den Seiten zu |
 
-Das Frontend rechnet **keine** Salden. Es zeigt an, was `GET /api/balances` liefert.
+Das Frontend rechnet **keine** Salden aus. Es zeigt an, was `GET /api/balances` liefert.
 
 ## Datenfluss: „Was passiert, wenn ich auf Speichern klicke?“
 
 Beispiel: neue Ausgabe „Einkauf, 30,00 €“.
 
-1. **`ExpenseForm.vue`**: `submit()` wandelt „30,00“ in `3000` Cent um, prüft grob
-   (Betrag gültig, mindestens ein Beteiligter) und sendet das Event `save` mit den Daten.
-2. **`ExpensesView.vue`**: `save()` ruft über `useRequest().run(...)` die Funktion
-   `api.expenses.create(input)` auf.
-3. **`api/client.ts`**: schickt `POST /api/expenses` mit JSON-Body.
-4. **Vite-Proxy** (Entwicklung) leitet an `localhost:8000` weiter.
-   In Produktion liefert das Backend das Frontend selbst aus, also gleicher Server.
-5. **`routes/expenses.ts`**: Der Zod-Validator prüft das Format. Bei Fehler sofort 400.
-6. **`services/expense_service.ts`**: prüft, ob Zahler und Beteiligte existieren. Sonst 422.
-7. **`repositories/sqlite.ts`**: schreibt in einer **Transaktion** die Ausgabe in `expenses`
-   und die Beteiligten in `expense_participants`.
-8. Antwort **201** mit der gespeicherten Ausgabe inklusive `id`.
-9. **`ExpensesView.vue`**: leert das Formular (neuer `key`) und lädt die Liste neu.
-   Bei einem Fehler bleibt das Formular gefüllt und `ErrorMessage` zeigt die Meldung des Backends.
+1. **`ExpenseForm.vue`** – `submit()` rechnet „30,00“ in `3000` Cent um, prüft grob
+   (Betrag gültig, mindestens eine Person) und sendet das Event `save` mit den Daten.
+2. **`ExpensesView.vue`** – `save()` empfängt das Event und ruft `addExpense(data)` auf.
+3. **`api.ts`** – schickt `POST /api/expenses` mit den Daten als JSON.
+4. **Vite-Proxy** (nur in der Entwicklung) leitet die Anfrage an das Backend auf Port 8000 weiter.
+5. **`routes/expenses.ts`** – `zValidator` prüft mit `expenseSchema` das Format. Bei Fehler: 400.
+6. **`routes/expenses.ts`** – `checkExpense()` prüft, ob alle Mitglieder existieren. Sonst: 400.
+7. **`database.ts`** – `addExpense()` speichert in einer **Transaktion** die Ausgabe in
+   `expenses` und die Beteiligten in `expense_participants`.
+8. Das Backend antwortet mit **201** und der gespeicherten Ausgabe (jetzt mit `id`).
+9. **`ExpensesView.vue`** – leert das Formular (neuer `key`) und lädt die Liste neu.
+   Bei einem Fehler zeigt die Seite die Meldung an, die Eingaben bleiben erhalten.
 
 ## „Was wäre, wenn das Vue-Frontend durch eine mobile App ersetzt wird?“
 
-Am Backend ändert sich **nichts**. Die Geschäftslogik (Aufteilen, Salden, Ausgleich)
-und alle Prüfungen liegen hinter der REST-API. Eine App ruft dieselben Endpunkte auf
-und bekommt dieselben Ergebnisse und Fehlermeldungen.
+Am Backend ändert sich **nichts**. Die Rechenlogik und alle Prüfungen liegen im Backend.
+Eine App ruft dieselben Endpunkte auf und bekommt dieselben Ergebnisse und Fehlermeldungen.
 
-Anpassen müsste man nur:
-- **CORS**, falls die App aus einem anderen Ursprung zugreift (bei nativen Apps meist nicht nötig).
-- **Login**, sobald die API öffentlich erreichbar ist (siehe [ADR 0004](adr/0004-kein-login.md)).
+Nur wenn die App aus dem Internet zugreift, bräuchte man zusätzlich einen Login
+(siehe [ADR 0004](adr/0004-kein-login.md)).
 
 ## Datenmodell (SQLite)
 
 ```
-members (id, name UNIQUE)
+members (id, name)
    ▲  ▲  ▲
-   │  │  └──────────────── settlements (id, from_member, to_member, amount_cents, date)
-   │  └── expense_participants (expense_id, member_id)   ← n:m
+   │  │  └──────── settlements (id, fromId, toId, amountCents, date)
+   │  └── expense_participants (expenseId, memberId)   ← Zwischentabelle
    │                │
-   └── expenses (id, description, amount_cents, date, paid_by)
+   └── expenses (id, description, amountCents, date, paidBy)
 ```
 
-- `expense_participants` bildet die n:m-Beziehung „Ausgabe ↔ beteiligte Mitglieder“ ab.
-- Fremdschlüssel sind aktiv (`PRAGMA foreign_keys = ON`). Beim Löschen einer Ausgabe
-  werden ihre Beteiligten automatisch mitgelöscht (`ON DELETE CASCADE`).
-- `CHECK`-Regeln in der Datenbank (Betrag > 0, Zahler ≠ Empfänger) sichern die Daten
-  zusätzlich zur Validierung ab.
+- Eine Ausgabe hat **mehrere** Beteiligte, ein Mitglied ist an **mehreren** Ausgaben beteiligt.
+  Diese n:m-Beziehung braucht die Zwischentabelle `expense_participants`.
+- Fremdschlüssel sind eingeschaltet (`PRAGMA foreign_keys = ON`). Wird eine Ausgabe gelöscht,
+  löscht SQLite ihre Beteiligten automatisch mit (`ON DELETE CASCADE`).
+- Die Datenbank prüft zusätzlich selbst: Betrag > 0 (`CHECK`), Namen eindeutig (`UNIQUE`).
