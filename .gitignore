@@ -1,0 +1,8 @@
+# SQLite-Datenbank (lokale Daten, nicht ins Repo)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+.env
+.DS_Store
