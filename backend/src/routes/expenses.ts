@@ -12,15 +12,20 @@ import {
   updateExpense,
 } from "../database.ts";
 import { expenseSchema, onInvalid } from "../schemas.ts";
+import { type Env, requireLogin } from "../session.ts";
 import type { Expense } from "../types.ts";
 
-export const expenseRoutes = new Hono();
+export const expenseRoutes = new Hono<Env>();
+
+// Alle Routen in dieser Datei brauchen eine Anmeldung.
+expenseRoutes.use(requireLogin);
 
 // Prüfungen, für die man die Datenbank braucht. Zod kann das nicht prüfen.
-function checkExpense(data: Omit<Expense, "id">) {
+function checkExpense(userId: number, data: Omit<Expense, "id">) {
   const memberIds = [data.paidBy, ...data.participants];
   for (const id of memberIds) {
-    if (!getMember(id)) {
+    // getMember findet nur Mitglieder der eigenen WG
+    if (!getMember(userId, id)) {
       throw new HTTPException(400, { message: `Mitglied mit ID ${id} existiert nicht` });
     }
   }
@@ -30,14 +35,16 @@ function checkExpense(data: Omit<Expense, "id">) {
   }
 }
 
-// Alle Ausgaben auflisten (neueste zuerst)
+// Alle Ausgaben der eigenen WG auflisten (neueste zuerst)
 expenseRoutes.get("/", (c) => {
-  return c.json(getExpenses());
+  const userId = c.get("userId");
+  return c.json(getExpenses(userId));
 });
 
 // Eine Ausgabe anzeigen
 expenseRoutes.get("/:id", (c) => {
-  const expense = getExpense(Number(c.req.param("id")));
+  const userId = c.get("userId");
+  const expense = getExpense(userId, Number(c.req.param("id")));
   if (!expense) {
     throw new HTTPException(404, { message: "Ausgabe nicht gefunden" });
   }
@@ -46,32 +53,35 @@ expenseRoutes.get("/:id", (c) => {
 
 // Neue Ausgabe anlegen
 expenseRoutes.post("/", zValidator("json", expenseSchema, onInvalid), (c) => {
+  const userId = c.get("userId");
   const data = c.req.valid("json");
-  checkExpense(data);
-  const expense = addExpense(data);
+  checkExpense(userId, data);
+  const expense = addExpense(userId, data);
   return c.json(expense, 201);
 });
 
 // Ausgabe ändern. PUT, weil das Formular immer alle Felder schickt.
 expenseRoutes.put("/:id", zValidator("json", expenseSchema, onInvalid), (c) => {
+  const userId = c.get("userId");
   const id = Number(c.req.param("id"));
   const data = c.req.valid("json");
 
-  if (!getExpense(id)) {
+  if (!getExpense(userId, id)) {
     throw new HTTPException(404, { message: "Ausgabe nicht gefunden" });
   }
-  checkExpense(data);
+  checkExpense(userId, data);
 
-  const expense = updateExpense(id, data);
+  const expense = updateExpense(userId, id, data);
   return c.json(expense);
 });
 
 // Ausgabe löschen
 expenseRoutes.delete("/:id", (c) => {
+  const userId = c.get("userId");
   const id = Number(c.req.param("id"));
-  if (!getExpense(id)) {
+  if (!getExpense(userId, id)) {
     throw new HTTPException(404, { message: "Ausgabe nicht gefunden" });
   }
-  deleteExpense(id);
+  deleteExpense(userId, id);
   return c.body(null, 204);
 });

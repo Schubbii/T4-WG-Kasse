@@ -14,6 +14,25 @@ const amountCents = z
 
 const date = z.iso.date("Datum muss im Format JJJJ-MM-TT sein");
 
+// Registrieren: Regeln für neue Konten
+export const registerSchema = z.object({
+  username: z
+    .string("Benutzername fehlt")
+    .trim()
+    .min(3, "Benutzername muss mindestens 3 Zeichen haben")
+    .max(30, "Benutzername darf höchstens 30 Zeichen haben"),
+  password: z
+    .string("Passwort fehlt")
+    .min(8, "Passwort muss mindestens 8 Zeichen haben")
+    .max(100, "Passwort darf höchstens 100 Zeichen haben"),
+});
+
+// Anmelden: nur prüfen, dass etwas eingegeben wurde
+export const loginSchema = z.object({
+  username: z.string("Benutzername fehlt").trim().min(1, "Benutzername fehlt"),
+  password: z.string("Passwort fehlt").min(1, "Passwort fehlt"),
+});
+
 export const memberSchema = z.object({
   name: z
     .string("Name fehlt")

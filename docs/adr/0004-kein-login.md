@@ -1,6 +1,9 @@
 # ADR 0004: Kein Login
 
-**Status:** angenommen
+**Status:** ersetzt durch [ADR 0009](0009-login-pro-wg.md)
+
+> Diese Entscheidung wurde zurückgenommen. Das Briefing zum Prüfungsgespräch erwartet
+> Anmeldung, Sessions und Datentrennung zwischen Benutzern. Der Text bleibt als Verlauf stehen.
 
 ## Kontext
 Im Kurs wurden Login mit HTTP-only Cookies und Passwort-Hashing gezeigt.

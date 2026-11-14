@@ -6,3 +6,6 @@
 
 .env
 .DS_Store
+
+# curl-Beispiele aus docs/api.md
+cookies.txt

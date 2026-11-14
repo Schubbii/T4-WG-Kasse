@@ -1,6 +1,13 @@
 // Die Datentypen der WG-Kasse.
 // Alle Geldbeträge sind ganze Cent: 1250 bedeutet 12,50 €.
 
+// Ein Benutzerkonto gehört zu einer WG. Das Passwort ist hier bewusst nicht enthalten,
+// damit es nie versehentlich in einer Antwort an den Browser landet.
+export interface User {
+  id: number;
+  username: string;
+}
+
 export interface Member {
   id: number;
   name: string;

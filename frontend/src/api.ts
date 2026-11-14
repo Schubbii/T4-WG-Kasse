@@ -1,10 +1,11 @@
 // Alle Anfragen an das Backend stehen in dieser Datei.
 // Die Komponenten rufen nur diese Funktionen auf und wissen nichts über URLs oder fetch.
 
-import type { Balance, Expense, Member, Settlement, Suggestion } from './types'
+import type { Balance, Expense, Member, Settlement, Suggestion, User } from './types'
 
 // Schickt eine Anfrage an /api/... und gibt die JSON-Antwort zurück.
 // Bei einem Fehler wird die Fehlermeldung des Backends als Error geworfen.
+// Das Session-Cookie schickt der Browser automatisch mit (gleiche Adresse wie die Seite).
 async function request(method: string, path: string, body?: object) {
   const response = await fetch('/api' + path, {
     method: method,
@@ -22,6 +23,29 @@ async function request(method: string, path: string, body?: object) {
     throw new Error(data.error)
   }
   return data
+}
+
+// ---------- Anmeldung ----------
+
+export function register(username: string, password: string): Promise<User> {
+  return request('POST', '/auth/register', { username: username, password: password })
+}
+
+export function login(username: string, password: string): Promise<User> {
+  return request('POST', '/auth/login', { username: username, password: password })
+}
+
+export function logout() {
+  return request('POST', '/auth/logout')
+}
+
+// Gibt das angemeldete Konto zurück, oder null wenn niemand angemeldet ist.
+export async function getMe(): Promise<User | null> {
+  try {
+    return await request('GET', '/auth/me')
+  } catch {
+    return null
+  }
 }
 
 // ---------- Mitglieder ----------

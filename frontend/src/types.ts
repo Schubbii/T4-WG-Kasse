@@ -1,6 +1,12 @@
 // Die Datentypen, die die REST-API liefert (gleich wie im Backend).
 // Alle Geldbeträge sind ganze Cent: 1250 bedeutet 12,50 €.
 
+// Das angemeldete WG-Konto
+export interface User {
+  id: number
+  username: string
+}
+
 export interface Member {
   id: number
   name: string

@@ -6,6 +6,7 @@
 Browser (Vue)                                Deno-Server (Hono)
 ─────────────                                ──────────────────
 views/  (Seiten)                             routes/      prüfen, speichern, antworten
+  │                                            │  session.ts   angemeldet? (Cookie → userId)
   │                                            │  schemas.ts   Format prüfen (Zod)
   ├→ components/  (Anzeige, Eingabe)           │  balance.ts   Salden berechnen
   │                                            ▼
@@ -21,6 +22,9 @@ Frontend und Backend sind **entkoppelt**: Sie kennen sich nur über die REST-API
 | `main.ts` | Startet alles: Datenbank öffnen, Frontend ausliefern, Server auf Port 8000 |
 | `src/app.ts` | Bindet die Routen unter `/api/...` ein. Zentrale Fehlerbehandlung. |
 | `src/routes/*.ts` | Eine Datei pro Ressource. Jede Route: Eingabe prüfen → Datenbank-Funktion aufrufen → JSON zurückgeben |
+| `src/routes/auth.ts` | Registrieren, Anmelden, Abmelden, „Wer bin ich?“ |
+| `src/session.ts` | Session anlegen und löschen, Cookie setzen, Middleware `requireLogin` |
+| `src/password.ts` | Passwort hashen (scrypt mit Salt) und prüfen |
 | `src/schemas.ts` | Zod-Schemas: Wie sieht eine gültige Eingabe aus? |
 | `src/database.ts` | Tabellen anlegen und alle SQL-Befehle. Sonst steht nirgends SQL. |
 | `src/balance.ts` | Rechenlogik ohne Datenbank und HTTP: aufteilen, Salden, Ausgleich |
@@ -43,7 +47,11 @@ in `app.ts` macht daraus immer dieselbe Antwort: `{ "error": "Meldung" }`.
 | `components/` | Zeigen Daten an (über Props) und melden Klicks nach oben (über Events). Sprechen nie selbst mit dem Backend. |
 | `api.ts` | Einzige Stelle mit `fetch`. Wirft bei einem Fehler die Meldung des Backends. |
 | `format.ts` | Euro ↔ Cent, Datum anzeigen, Namen zu einer ID suchen |
-| `router.ts` | Ordnet Adressen den Seiten zu |
+| `router.ts` | Ordnet Adressen den Seiten zu. `beforeEach` leitet ohne Anmeldung zu `/login` um. |
+| `auth.ts` | `currentUser`: das angemeldete Konto. Wird von Router, `App.vue` und Login-Seite geteilt. |
+
+**Wo liegt der Zustand?** Die Daten gehören dem Backend. Jede Seite hält eine Kopie in eigenen
+`ref()`s und lädt nach jeder Änderung neu. Einziger geteilter Zustand ist `currentUser` in `auth.ts`.
 
 Das Frontend rechnet **keine** Salden aus. Es zeigt an, was `GET /api/balances` liefert.
 
@@ -64,27 +72,58 @@ Beispiel: neue Ausgabe „Einkauf, 30,00 €“.
 9. **`ExpensesView.vue`** – leert das Formular (neuer `key`) und lädt die Liste neu.
    Bei einem Fehler zeigt die Seite die Meldung an, die Eingaben bleiben erhalten.
 
+## Anmeldung und Datentrennung
+
+**Anmelden:**
+1. `LoginView.vue` schickt Benutzername und Passwort per `POST /api/auth/login`.
+2. `routes/auth.ts` sucht das Konto und prüft das Passwort mit `verifyPassword()`.
+   Falsch → **401** „Benutzername oder Passwort falsch“ (gleiche Meldung für beide Fälle).
+3. `startSession()` erzeugt eine zufällige Session-ID (`crypto.randomUUID()`), speichert sie in
+   der Tabelle `sessions` und schickt sie als Cookie (`Set-Cookie: session=…; HttpOnly; SameSite=Lax`).
+4. Ab jetzt schickt der Browser das Cookie bei jeder Anfrage an `/api` automatisch mit.
+
+**Jede weitere Anfrage:**
+1. `requireLogin` (in `session.ts`) läuft vor jeder Route in `members`, `expenses`, `settlements`, `balances`.
+2. Es liest das Cookie, sucht die Session in der Datenbank und prüft, ob sie jünger als 7 Tage ist.
+   Keine gültige Session → **401**.
+3. Sonst speichert es `userId` im Context (`c.set`). Die Route holt sie mit `c.get("userId")`.
+4. Jede Datenbank-Funktion bekommt die `userId` und filtert mit `WHERE userId = ?`.
+   Daten einer anderen WG werden dadurch nie gefunden → **404**.
+
+**Passwörter** werden nie im Klartext gespeichert, sondern als `salt:hash` mit scrypt.
+Das Salt ist für jedes Passwort zufällig.
+
+**Der Login im Frontend ist nur Komfort.** `router.beforeEach` leitet ohne Anmeldung zur
+Login-Seite. Geschützt werden die Daten aber im Backend: Wer die API direkt aufruft, bekommt
+ohne Cookie trotzdem 401.
+
 ## „Was wäre, wenn das Vue-Frontend durch eine mobile App ersetzt wird?“
 
 Am Backend ändert sich **nichts**. Die Rechenlogik und alle Prüfungen liegen im Backend.
 Eine App ruft dieselben Endpunkte auf und bekommt dieselben Ergebnisse und Fehlermeldungen.
-
-Nur wenn die App aus dem Internet zugreift, bräuchte man zusätzlich einen Login
-(siehe [ADR 0004](adr/0004-kein-login.md)).
+Auch die Anmeldung funktioniert: Eine App kann das Session-Cookie genauso speichern und mitschicken.
 
 ## Datenmodell (SQLite)
 
 ```
-members (id, name)
+users (id, username, passwordHash) ◄── sessions (id, userId, createdAt)
+   ▲
+   │ userId (in members, expenses, settlements)
+   │
+members (id, userId, name)
    ▲  ▲  ▲
-   │  │  └──────── settlements (id, fromId, toId, amountCents, date)
+   │  │  └──────── settlements (id, userId, fromId, toId, amountCents, date)
    │  └── expense_participants (expenseId, memberId)   ← Zwischentabelle
    │                │
-   └── expenses (id, description, amountCents, date, paidBy)
+   └── expenses (id, userId, description, amountCents, date, paidBy)
 ```
+
+- Ein Konto (`users`) steht für eine WG. Mitglieder, Ausgaben und Rückzahlungen gehören über
+  `userId` zu genau einem Konto.
 
 - Eine Ausgabe hat **mehrere** Beteiligte, ein Mitglied ist an **mehreren** Ausgaben beteiligt.
   Diese n:m-Beziehung braucht die Zwischentabelle `expense_participants`.
 - Fremdschlüssel sind eingeschaltet (`PRAGMA foreign_keys = ON`). Wird eine Ausgabe gelöscht,
   löscht SQLite ihre Beteiligten automatisch mit (`ON DELETE CASCADE`).
-- Die Datenbank prüft zusätzlich selbst: Betrag > 0 (`CHECK`), Namen eindeutig (`UNIQUE`).
+- Die Datenbank prüft zusätzlich selbst: Betrag > 0 (`CHECK`), Benutzernamen eindeutig,
+  Mitgliedsnamen eindeutig pro WG (`UNIQUE (userId, name)`).

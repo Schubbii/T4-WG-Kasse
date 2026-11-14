@@ -2,6 +2,7 @@
 
 import { Hono } from "@hono/hono";
 import { HTTPException } from "@hono/hono/http-exception";
+import { authRoutes } from "./routes/auth.ts";
 import { balanceRoutes } from "./routes/balances.ts";
 import { expenseRoutes } from "./routes/expenses.ts";
 import { memberRoutes } from "./routes/members.ts";
@@ -9,7 +10,8 @@ import { settlementRoutes } from "./routes/settlements.ts";
 
 export const app = new Hono();
 
-app.route("/api/members", memberRoutes);
+app.route("/api/auth", authRoutes); // ohne Login erreichbar
+app.route("/api/members", memberRoutes); // ab hier nur mit Login (requireLogin in den Dateien)
 app.route("/api/expenses", expenseRoutes);
 app.route("/api/settlements", settlementRoutes);
 app.route("/api/balances", balanceRoutes);
